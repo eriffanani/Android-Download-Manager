@@ -4,8 +4,10 @@ data class ModelItemMultiple (
     val id: Int,
     val url: String,
     val title: String,
-    var progress: Int,
-    var totalSize: Int,
+    var percent: Int,
+    var progressSize: String?,
+    var totalSize: String?,
+    var path: String? = null,
     var status: Int = DownloadStatus.NOT_DOWNLOADED,
     var downloadId: Long = -1
 )

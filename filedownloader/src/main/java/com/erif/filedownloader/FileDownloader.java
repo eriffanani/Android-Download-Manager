@@ -6,6 +6,8 @@ import android.os.Environment;
 
 import androidx.annotation.NonNull;
 
+import java.text.DecimalFormat;
+
 public class FileDownloader {
 
     private static final int CONN_MOBILE = DownloadManager.Request.NETWORK_MOBILE;
@@ -55,8 +57,46 @@ public class FileDownloader {
         request.setNotificationVisibility(manager.showNotification() ? NOTIFICATION : NOTIFICATION_HIDE);
 
         long id = manager.getManager().enqueue(request);
-        manager.getListener().onDownloadStart(id, url);
-        manager.runChecker();
+        manager.getListener().onDownloadStart(id);
+        manager.runTracker();
+    }
+
+    public static int percent(int downloadedSize, int fileSize) {
+        return (int) ((downloadedSize * 100L) / fileSize);
+    }
+
+    public static void sizeFormat(int fileSize, @NonNull CallbackSizeFormat callback) {
+        sizeFormat(fileSize, "#0.00", callback);
+    }
+
+    public static void sizeFormat(
+            int fileSize, @NonNull String decimalPattern,
+            @NonNull CallbackSizeFormat callback
+    ) {
+        DecimalFormat formatter = new DecimalFormat(decimalPattern);
+        float sizeInKB = fileSize / 1024f;
+        float sizeInMB = sizeInKB / 1024f;
+        float sizeInGB = sizeInMB / 1024f;
+        float sizeInTB = sizeInGB / 1024f;
+        String unit;
+        float size;
+        if (sizeInTB >= 1) {
+            unit = "tb";
+            size = sizeInTB;
+        } else if (sizeInGB >= 1) {
+            unit = "gb";
+            size = sizeInGB;
+        } else if (sizeInMB >= 1) {
+            unit = "mb";
+            size = sizeInMB;
+        } else if (sizeInKB >= 1){
+            unit = "kb";
+            size = sizeInKB;
+        } else {
+            unit = "bytes";
+            size = (float) fileSize;
+        }
+        callback.onFormat(unit, formatter.format(size));
     }
 
 }

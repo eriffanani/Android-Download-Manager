@@ -14,11 +14,10 @@ import com.erif.filedownloader.FileDownloader
 import com.erif.filedownloaderdemo.R
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
-import java.text.DecimalFormat
 
 class ActSingleFileDownload : AppCompatActivity(), FileDownloadListener {
 
-    private var downloadManager: FileDownloadManager? = null
+    private lateinit var manager: FileDownloadManager
     private lateinit var txtPercent: TextView
     private lateinit var txtProgressSize: TextView
     private lateinit var txtTotalSize: TextView
@@ -39,12 +38,12 @@ class ActSingleFileDownload : AppCompatActivity(), FileDownloadListener {
         txtTotalSize = findViewById(R.id.txtTotalSize)
         progressBar = findViewById(R.id.progress)
         button = findViewById(R.id.button)
-        downloadManager = FileDownloadManager(this, this, this)
+        manager = FileDownloadManager(this, this)
 
         button.setOnClickListener {
             val url = "https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-Download.mp4"
             //val url = "https://media.neliti.com/media/publications/249244-none-837c3dfb.pdf"
-            FileDownloader(downloadManager)
+            FileDownloader(manager)
                 .setUrl(url)
                 .download()
         }
@@ -53,61 +52,54 @@ class ActSingleFileDownload : AppCompatActivity(), FileDownloadListener {
 
     override fun onPause() {
         super.onPause()
-        downloadManager?.onPause()
+        manager.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        downloadManager?.onResume()
+        manager.onResume()
     }
 
-    override fun onDownloadStart(id: Long, url: String) {
+    override fun onDownloadStart(id: Long) {
         progressBar.isIndeterminate = true
     }
 
-    override fun onDownloadRunning(
-        id: Long, url: String,
-        downloadedSize: Long, fileSize: Long
-    ) {
-        log("id: $id - Url: $url")
-        progressBar.isIndeterminate = false
-        val percent = ((downloadedSize * 100L) / fileSize).toInt()
-        progressBar.setProgress(percent, true)
-        val percentage = "$percent%"
-        txtPercent.text = percentage
+    override fun onDownloadRunning(id: Long) {
+        manager.findDownloadById(id)?.apply {
+            progressBar.isIndeterminate = false
+            val percent = FileDownloader.percent(downloadedSize, fileSize)
+            progressBar.setProgress(percent, true)
+            val percentage = "$percent%"
+            txtPercent.text = percentage
 
-        val formatter = DecimalFormat("#0.00")
-        FileDownloadManager.sizeFormat(downloadedSize).entries.forEach { map ->
-            val sizeName = map.key.uppercase()
-            val sizeValue = formatter.format(map.value)
-            val totalSize = "$sizeValue$sizeName"
-            txtProgressSize.text = totalSize
-        }
+            FileDownloader.sizeFormat(downloadedSize) { unit, size ->
+                val totalSize = "$size${unit.uppercase()}"
+                txtProgressSize.text = totalSize
+            }
 
-        val totalFormat = FileDownloadManager.sizeFormat(fileSize)
-        totalFormat.entries.forEach { map ->
-            val sizeName = map.key.uppercase()
-            val sizeValue = formatter.format(map.value)
-            val totalSize = "$sizeValue$sizeName"
-            txtTotalSize.text = totalSize
+            FileDownloader.sizeFormat(fileSize) { unit, size ->
+                val totalSize = "$size${unit.uppercase()}"
+                txtTotalSize.text = totalSize
+            }
         }
     }
 
-    override fun onDownloadPaused(id: Long, url: String) {
+    override fun onDownloadPaused(id: Long) {
         toast("Download File $id Paused")
     }
 
-    override fun onDownloadStopped(id: Long, url: String) {
+    override fun onDownloadStopped(id: Long) {
         toast("Download File $id Stopped")
     }
 
-    override fun onDownloadFailed(id: Long, url: String) {
+    override fun onDownloadFailed(id: Long, reason: String?) {
         toast("Download File $id Failed")
     }
 
-    override fun onDownloadSuccess(id: Long, url: String, path: String?) {
-        toast("Download File $id Success: $path")
-        log("Download Success $id: $path")
+    override fun onDownloadSuccess(id: Long, path: String) {
+        manager.findDownloadById(id)?.apply {
+            log("Download Success $id: $uri")
+        }
     }
 
     private fun toast(message: String) {

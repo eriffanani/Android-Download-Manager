@@ -6,89 +6,76 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
-import androidx.lifecycle.LifecycleOwner;
-import java.util.HashMap;
-import java.util.Map;
+
+import java.io.File;
 
 public class FileDownloadManager {
 
+    // Constant
     private static final String DOWNLOAD_COMPLETE = DownloadManager.ACTION_DOWNLOAD_COMPLETE;
 
-    private final Context context;
-
+    // Download Manager
     private final DownloadManager manager;
     DownloadManager getManager() {return manager;}
 
+    // Listener
     private final FileDownloadListener listener;
     FileDownloadListener getListener(){return listener;}
 
+    // Query Manager
+    private final QueryManager query;
+    QueryManager getQuery(){return query;}
+
+    // Cursor Manager
+    private final CursorManager cursor;
+    CursorManager getCursor(){return cursor;}
+
+    // Download Tracker
+    private final DownloadTracker tracker;
+
+    // Properties
     private boolean wifiOnly = false;
     private boolean showNotification = false;
 
-    private final FileDownloadChecker checker;
-
+    // Constructor
     public FileDownloadManager(
             @NonNull Context context,
-            @NonNull LifecycleOwner owner,
             @NonNull FileDownloadListener listener
     ) {
-        this.context = context;
         this.listener = listener;
         this.manager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
-        //DownloadRepository repository = new DownloadRepository(context);
-        checker = new FileDownloadChecker(this);
-        //repository.insert(new DownloadModel(1, "https://www.modot.com", "Download"));
-        /* Optional
-            repository.getAll().observe(owner, downloads -> {
-                for (DownloadModel download: downloads) {
-                    long id = download.getId();
-                    String url = download.getUrl();
-                    String dest = download.getDestination();
-                    Log.e("Downloader Lib", "Id: "+id+" URL: "+url+" Destination: "+dest);
-                }
-            });
-        */
+        query = new QueryManager();
+        cursor = new CursorManager();
+        tracker = new DownloadTracker(this);
 
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (intent != null) {
-                    if (isDownloadComplete(intent)) {
-                        Log.d("TAG", "onReceive");
+                    String action = intent.getAction();
+                    boolean isDownloadComplete = action != null && action.equals(DOWNLOAD_COMPLETE);
+                    if (isDownloadComplete) {
                         if (context != null) {
-                            Cursor mCursor = manager.query(
-                                    new DownloadManager.Query()
-                                            .setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
-                            );
+                            Cursor mCursor = manager.query(query.downloaded());
                             if (mCursor.moveToFirst()) {
-                                long id = mCursor.getLong(indexId(mCursor));
-                                int idxUrl = mCursor.getColumnIndex(DownloadManager.COLUMN_URI);
-                                int idxPath = mCursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-                                String url = mCursor.getString(idxUrl);
-                                String path = mCursor.getString(idxPath);
-                                listener.onDownloadSuccess(id, url, path);
-                                /* Optional
-                                    manager.remove(id);
-                                    repository.delete(id);
-                                */
+                                long id = cursor.getId(mCursor);
+                                String uri = cursor.getUri(mCursor);
+                                File file = uriToFile(uri);
+                                if (file.exists())
+                                    listener.onDownloadSuccess(id, file.getAbsolutePath());
+                                else
+                                    listener.onDownloadStopped(id);
                             }
                         }
                     }
                 }
             }
-
-            private boolean isDownloadComplete(Intent intent) {
-                String action = intent.getAction();
-                return action != null && action.equals(DOWNLOAD_COMPLETE);
-            }
-
         };
         IntentFilter intentFilter = new IntentFilter(DOWNLOAD_COMPLETE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -100,7 +87,6 @@ public class FileDownloadManager {
                     context, receiver, intentFilter, ContextCompat.RECEIVER_EXPORTED
             );
         }
-
     }
 
     public void useWifiOnly(boolean wifiOnly) {
@@ -118,84 +104,55 @@ public class FileDownloadManager {
     }
 
     public void stopAll() {
-        Cursor cursor = manager.query(queryRunning());
-        while (cursor.moveToNext()) {
-            int idx = cursor.getColumnIndex(DownloadManager.COLUMN_ID);
-            long id = cursor.getLong(idx);
+        Cursor mCursor = manager.query(query.runningAll());
+        while (mCursor.moveToNext()) {
+            long id = cursor.getId(mCursor);
             manager.remove(id);
         }
-        cursor.close();
-    }
-
-    private DownloadManager.Query query(int status) {
-        DownloadManager.Query query = new DownloadManager.Query();
-        query.setFilterByStatus(status);
-        return query;
-    }
-
-    private int indexId(Cursor cursor) {
-        return cursor.getColumnIndex(DownloadManager.COLUMN_ID);
-    }
-
-    long getDownloadId(Cursor cursor) {
-        return cursor.getLong(indexId(cursor));
-    }
-
-    DownloadManager.Query queryRunning() {
-        return new DownloadManager.Query()
-                .setFilterByStatus(DownloadManager.STATUS_RUNNING);
-    }
-
-    DownloadManager.Query queryRunningAll() {
-        return new DownloadManager.Query()
-                .setFilterByStatus(
-                        DownloadManager.STATUS_RUNNING |
-                        DownloadManager.STATUS_PENDING
-                );
-    }
-
-    private DownloadManager.Query querySuccess() {
-        return new DownloadManager.Query()
-                .setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL);
-    }
-
-    private DownloadManager.Query queryFailed() {
-        return new DownloadManager.Query()
-                .setFilterByStatus(DownloadManager.STATUS_FAILED);
-    }
-
-    private DownloadManager.Query queryPaused() {
-        return new DownloadManager.Query()
-                .setFilterByStatus(DownloadManager.STATUS_PAUSED);
+        mCursor.close();
     }
 
     public void onPause() {
-        checker.stopChecker();
+        tracker.stopTracker();
     }
 
     public void onResume() {
-        checker.runChecker(true);
+        tracker.run(true);
     }
 
-    void runChecker() {
-        checker.runChecker(false);
+    public void trackDownloads() {
+        getDownloadedFile();
     }
 
-    public static Map<String, Float> sizeFormat(long fileSizeInKb) {
-        Map<String, Float> map = new HashMap<>();
-        float totalInTB = fileSizeInKb / 1024f / 1024f / 1024f;
-        float totalInGB = fileSizeInKb / 1024f / 1024f;
-        float totalInMB = fileSizeInKb / 1024f;
-        if (totalInTB >= 1) {
-            map.put("tb", totalInTB);
-        } else if (totalInGB >= 1) {
-            map.put("gb", totalInGB);
-        } else if (totalInMB >= 1) {
-            map.put("mb", totalInMB);
-        } else {
-            map.put("kb", (float) fileSizeInKb);
+    void runTracker() {
+        tracker.run(false);
+    }
+
+    private void getDownloadedFile() {
+        Cursor mCursor = manager.query(query.downloaded());
+        while (mCursor.moveToNext()) {
+            long id = cursor.getId(mCursor);
+            String uri = cursor.getUri(mCursor);
+            File file = uriToFile(uri);
+            if (file.exists())
+                listener.onDownloadSuccess(id, file.getAbsolutePath());
+            else
+                listener.onDownloadStopped(id);
         }
-        return map;
+        mCursor.close();
+    }
+
+    private File uriToFile(String uri) {
+        Uri mUri = Uri.parse(uri);
+        return new File(mUri.getPath());
+    }
+
+    public @Nullable DownloadItem findDownloadById(long id) {
+        Cursor mCursor = manager.query(query.query(id));
+        DownloadItem downloadItem = null;
+        if (mCursor.moveToFirst())
+            downloadItem = new DownloadItem(mCursor, cursor);
+        return downloadItem;
     }
 
 }

@@ -19,6 +19,7 @@
             app:title="Multiple Download">
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonMultipleDownload"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Download All"

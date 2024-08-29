@@ -1,5 +1,7 @@
 package com.erif.filedownloaderdemo.example.multiple
 
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,7 +12,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.CircularProgressIndicator
 
 class AdapterMultipleDownload(
-    private val list: MutableList<ModelItemMultiple>
+    private val list: MutableList<ModelItemMultiple>,
+    private val listener: OnClickItemListener
 ): RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -29,11 +32,13 @@ class AdapterMultipleDownload(
     }
 
     fun downloadStart(position: Int) {
-        list[position].status = DownloadStatus.DOWNLOAD_START
-        notifyItemChanged(position)
+        if (position >= 0) {
+            list[position].status = DownloadStatus.DOWNLOAD_START
+            notifyItemChanged(position)
+        }
     }
 
-    fun downloading(position: Int) {
+    private fun downloading(position: Int) {
         val item = list[position]
         val currentStatus = item.status
         if (currentStatus != DownloadStatus.DOWNLOADING) {
@@ -42,12 +47,67 @@ class AdapterMultipleDownload(
         }
     }
 
-    fun updateProgress(position: Int) {
-        list[position].progress = 20
-        notifyItemChanged(position)
+    fun updateProgress(
+        position: Int, percent: Int,
+        progressSize: String?, totalSize: String?
+    ) {
+        if (position >= 0) {
+            val item = list[position]
+            if (item.status != DownloadStatus.DOWNLOADED) {
+                downloading(position)
+                item.totalSize
+                item.percent = percent
+                item.progressSize = progressSize
+                item.totalSize = totalSize
+                notifyItemChanged(position)
+            }
+        }
     }
 
-    class Holder(
+    fun downloadSuccess(position: Int, totalSize: String?, path: String?) {
+        if (position >= 0) {
+            val item = list[position]
+            if (item.percent < 100) {
+                updateProgress(position, 100, item.totalSize, item.totalSize)
+                Handler(Looper.getMainLooper()).postDelayed({
+                    item.progressSize = item.totalSize
+                    item.path = path
+                    item.status = DownloadStatus.DOWNLOADED
+                    notifyItemChanged(position)
+                }, 800L)
+            } else {
+                item.progressSize = totalSize
+                item.totalSize = totalSize
+                item.path = path
+                item.status = DownloadStatus.DOWNLOADED
+                notifyItemChanged(position)
+            }
+        }
+    }
+
+    fun reset(position: Int) {
+        if (position >= 0) {
+            val item = list[position]
+            item.status = DownloadStatus.NOT_DOWNLOADED
+            notifyItemChanged(position)
+        }
+    }
+
+    fun findPosition(url: String?): Int {
+        var pos = -1
+        list.find { it.url == url }?.let { found ->
+            pos = list.indexOf(found)
+        }
+        return pos
+    }
+
+    fun getList(): MutableList<ModelItemMultiple> = list
+
+    fun getItem(position: Int): ModelItemMultiple {
+        return list[position]
+    }
+
+    inner class Holder(
         itemView: View
     ) : RecyclerView.ViewHolder(itemView) {
 
@@ -73,13 +133,20 @@ class AdapterMultipleDownload(
             if (downloadStart) {
                 progress.isIndeterminate = true
             } else if (downloading) {
-                val subtitle = "${item.progress} / ${item.totalSize}"
-                txtSubtitle.text = subtitle
-
                 progress.isIndeterminate = false
                 progress.max = 100
-                progress.setProgress(item.progress, true)
+                progress.setProgress(item.percent, true)
             }
+
+            txtSubtitle.text = if (downloading)
+                "${item.progressSize} / ${item.totalSize}"
+            else
+                "${item.totalSize}"
+
+            button.setOnClickListener {
+                listener.onClickItem(item)
+            }
+
         }
     }
 
