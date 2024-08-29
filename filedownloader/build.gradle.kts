@@ -8,8 +8,8 @@ afterEvaluate {
         publications {
             create<MavenPublication>("release") {
                 groupId = "com.github.eriffanani"
-                artifactId = "DownloadManager"
-                version = "1.0.1"
+                artifactId = "Android-Download-Manager"
+                version = "1.0.2"
                 afterEvaluate {
                     artifact(tasks.getByName("bundleReleaseAar"))
                 }
