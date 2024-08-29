@@ -1,5 +1,21 @@
 plugins {
     alias(libs.plugins.android.library)
+    id("maven-publish")
+}
+
+afterEvaluate {
+    configure<PublishingExtension> {
+        publications {
+            create<MavenPublication>("release") {
+                groupId = "com.github.eriffanani"
+                artifactId = "DownloadManager"
+                version = "1.0.0"
+                afterEvaluate {
+                    artifact(tasks.getByName("bundleReleaseAar"))
+                }
+            }
+        }
+    }
 }
 
 android {
