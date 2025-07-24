@@ -1,6 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
-    id("maven-publish")
+    alias(libs.plugins.maven)
 }
 
 afterEvaluate {
@@ -20,7 +20,7 @@ afterEvaluate {
 
 android {
     namespace = "com.erif.filedownloader"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 28
@@ -48,6 +48,7 @@ dependencies {
 
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

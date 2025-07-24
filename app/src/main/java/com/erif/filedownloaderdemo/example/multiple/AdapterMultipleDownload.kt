@@ -55,7 +55,6 @@ class AdapterMultipleDownload(
             val item = list[position]
             if (item.status != DownloadStatus.DOWNLOADED) {
                 downloading(position)
-                item.totalSize
                 item.percent = percent
                 item.progressSize = progressSize
                 item.totalSize = totalSize

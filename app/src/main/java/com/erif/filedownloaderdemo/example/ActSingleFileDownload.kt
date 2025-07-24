@@ -1,7 +1,10 @@
 package com.erif.filedownloaderdemo.example
 
+import android.content.ContentValues
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -22,7 +25,14 @@ class ActSingleFileDownload : AppCompatActivity(), FileDownloadListener {
     private lateinit var txtProgressSize: TextView
     private lateinit var txtTotalSize: TextView
     private lateinit var progressBar: LinearProgressIndicator
-    private lateinit var button: MaterialButton
+
+    private lateinit var btnDownload: MaterialButton
+    private lateinit var btnPause: MaterialButton
+    private lateinit var btnCancel: MaterialButton
+
+    //private val url = "https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-Download.mp4"
+    //private val url = "https://media.neliti.com/media/publications/249244-none-837c3dfb.pdf"
+    private val url = "https://link.testfile.org/aXCg7h"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,17 +47,49 @@ class ActSingleFileDownload : AppCompatActivity(), FileDownloadListener {
         txtProgressSize = findViewById(R.id.txtProgressSize)
         txtTotalSize = findViewById(R.id.txtTotalSize)
         progressBar = findViewById(R.id.progress)
-        button = findViewById(R.id.button)
+
+        btnDownload = findViewById(R.id.buttonDownload)
+        btnPause = findViewById(R.id.buttonPause)
+        btnPause.visibility = View.GONE
+        btnCancel = findViewById(R.id.buttonCancel)
+        btnCancel.visibility = View.GONE
         manager = FileDownloadManager(this, this)
 
-        button.setOnClickListener {
-            val url = "https://jsoncompare.org/LearningContainer/SampleFiles/Video/MP4/Sample-MP4-Video-File-Download.mp4"
-            //val url = "https://media.neliti.com/media/publications/249244-none-837c3dfb.pdf"
+        btnDownload.setOnClickListener {
             FileDownloader(manager)
                 .setUrl(url)
                 .download()
         }
 
+        btnCancel.setOnClickListener {
+            pauseDownload("Download", true)
+        }
+
+        btnPause.setOnClickListener {
+            pauseDownload("Download", false)
+        }
+
+    }
+
+    private fun pauseDownload(downloadTitle: String, pause: Boolean): Boolean {
+        var updatedRows = 0
+
+        val pauseDownload = ContentValues()
+        pauseDownload.put("control", if (pause) 1 else 0) // Pause Control Value
+
+        try {
+            updatedRows = contentResolver
+                .update(
+                    Uri.parse("content://downloads/my_downloads"),
+                    pauseDownload,
+                    "title=?",
+                    arrayOf(downloadTitle)
+                )
+        } catch (e: Exception) {
+            Log.e("TAG", "Failed to update control for downloading video")
+        }
+
+        return 0 < updatedRows
     }
 
     override fun onPause() {
@@ -62,6 +104,9 @@ class ActSingleFileDownload : AppCompatActivity(), FileDownloadListener {
 
     override fun onDownloadStart(id: Long) {
         progressBar.isIndeterminate = true
+        btnDownload.visibility = View.GONE
+        btnPause.visibility = View.VISIBLE
+        btnCancel.visibility = View.VISIBLE
     }
 
     override fun onDownloadRunning(id: Long) {
